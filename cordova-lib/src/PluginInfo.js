@@ -201,6 +201,26 @@ function PluginInfo(dirname) {
         return libFiles;
     }
 
+    // <script>
+    // Example:
+    // <script type="before_build" src="scripts/beforeBuild.js" />
+    self.getHookScripts = getHookScripts;
+    function getHookScripts(hook, platforms) {
+        var scriptElements =  self._et.findall('./script');
+
+        if(platforms) {
+            platforms.forEach(function (platform) {
+                scriptElements = scriptElements.concat(self._et.findall('./platform[@name="' + platform + '"]/script'));
+            });
+        }
+
+        function filterScriptByHookType(el) {
+            return el.attrib.src && el.attrib.type && el.attrib.type.toLowerCase() === hook;
+        }
+
+        return scriptElements.filter(filterScriptByHookType);
+    }
+
     // Tell whether there is a <platform> section for the given platform.
     self.hasPlatformSection = hasPlatformSection;
     function hasPlatformSection(platform) {
