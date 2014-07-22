@@ -30,7 +30,7 @@ var config            = require('./config'),
     fs                = require('fs'),
     os                = require('os'),
     path              = require('path'),
-    hooker            = require('./hooker'),
+    HooksRunner            = require('../hooks/HooksRunner'),
     events            = require('../events'),
     lazy_load         = require('./lazy_load'),
     CordovaError      = require('../CordovaError'),
@@ -57,7 +57,7 @@ function getVersionFromScript(script, defaultValue) {
     return versionPromise;
 }
 
-function add(hooks, projectRoot, targets, opts) {
+function add(hooksRunner, projectRoot, targets, opts) {
     var msg;
     if ( !targets || !targets.length ) {
         msg = 'No platform specified. Please specify a platform to add. ' +
@@ -84,7 +84,7 @@ function add(hooks, projectRoot, targets, opts) {
         shell.mkdir('-p', platformsDir);
     }
 
-    return hooks.fire('before_platform_add', opts)
+    return hooksRunner.fire('before_platform_add', opts)
     .then(function() {
         return promiseutil.Q_chainmap(targets, function(t) {
             // For each platform, download it and call its "create" script.
@@ -138,15 +138,15 @@ function add(hooks, projectRoot, targets, opts) {
         });
     })
     .then(function() {
-        return hooks.fire('after_platform_add', opts);
+        return hooksRunner.fire('after_platform_add', opts);
     });
 }
 
-function remove(hooks, projectRoot, targets, opts) {
+function remove(hooksRunner, projectRoot, targets, opts) {
     if (!targets || !targets.length) {
         return Q.reject(new CordovaError('No platform[s] specified. Please specify platform[s] to remove. See `'+cordova_util.binname+' platform list`.'));
     }
-    return hooks.fire('before_platform_rm', opts)
+    return hooksRunner.fire('before_platform_rm', opts)
     .then(function() {
         targets.forEach(function(target) {
             shell.rm('-rf', path.join(projectRoot, 'platforms', target));
@@ -154,11 +154,11 @@ function remove(hooks, projectRoot, targets, opts) {
             if (fs.existsSync(plugins_json)) shell.rm(plugins_json);
         });
     }).then(function() {
-        return hooks.fire('after_platform_rm', opts);
+        return hooksRunner.fire('after_platform_rm', opts);
     });
 }
 
-function update(hooks, projectRoot, targets, opts) {
+function update(hooksRunner, projectRoot, targets, opts) {
     // Shell out to the update script provided by the named platform.
     var msg;
     if ( !targets || !targets.length ) {
@@ -186,7 +186,7 @@ function update(hooks, projectRoot, targets, opts) {
     }
 
     // First, lazy_load the latest version.
-    return hooks.fire('before_platform_update', opts)
+    return hooksRunner.fire('before_platform_update', opts)
     .then(function() {
         return lazy_load.based_on_config(projectRoot, plat, opts);
     })
@@ -202,7 +202,7 @@ function update(hooks, projectRoot, targets, opts) {
     });
 }
 
-function check(hooks, projectRoot) {
+function check(hooksRunner, projectRoot) {
     var platformsText = [],
         platforms_on_fs = cordova_util.listPlatforms(projectRoot),
         scratch = path.join(os.tmpdir(), 'cordova-platform-check-' + Date.now()),
@@ -211,8 +211,7 @@ function check(hooks, projectRoot) {
     var result = Q.defer();
     cordova.raw.create(scratch)
     .then(function () {
-        // TODO: Replace with unified Hooker
-        var h = new hooker(scratch);
+        var h = new hooksRunner(scratch);
         // Acquire the version number of each platform we have installed, and output that too.
         Q.all(platforms_on_fs.map(function(p) {
             var d = Q.defer(),
@@ -295,9 +294,9 @@ function check(hooks, projectRoot) {
     return result.promise;
 }
 
-function list(hooks, projectRoot) {
+function list(hooksRunner, projectRoot) {
     var platforms_on_fs = cordova_util.listPlatforms(projectRoot);
-    return hooks.fire('before_platform_ls')
+    return hooksRunner.fire('before_platform_ls')
     .then(function() {
         // Acquire the version number of each platform we have installed, and output that too.
         return Q.all(platforms_on_fs.map(function(p) {
@@ -320,7 +319,7 @@ function list(hooks, projectRoot) {
 
         events.emit('results', results);
     }).then(function() {
-        return hooks.fire('after_platform_ls');
+        return hooksRunner.fire('after_platform_ls');
     });
 }
 
@@ -329,7 +328,7 @@ module.exports = platform;
 function platform(command, targets, opts) {
     var projectRoot = cordova_util.cdProjectRoot();
     var msg;
-    var hooks = new hooker(projectRoot);
+    var hooksRunner = new HooksRunner(projectRoot);
 
     if (arguments.length === 0) command = 'ls';
 
@@ -371,17 +370,17 @@ function platform(command, targets, opts) {
             if (idxWindows8 >=0) {
                 targets[idxWindows8] = 'windows';
             }
-            return add(hooks, projectRoot, targets, opts);
+            return add(hooksRunner, projectRoot, targets, opts);
         case 'rm':
         case 'remove':
-            return remove(hooks, projectRoot, targets, opts);
+            return remove(hooksRunner, projectRoot, targets, opts);
         case 'update':
         case 'up':
-            return update(hooks, projectRoot, targets, opts);
+            return update(hooksRunner, projectRoot, targets, opts);
         case 'check':
-            return check(hooks, projectRoot);
+            return check(hooksRunner, projectRoot);
         default:
-            return list(hooks, projectRoot);
+            return list(hooksRunner, projectRoot);
     }
 }
 
